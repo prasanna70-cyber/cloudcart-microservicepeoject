@@ -1,0 +1,60 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cloudcart-services
+  namespace: ecommerce
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+    - ecommerce
+  selector:
+    matchLabels:
+      cloudcart-monitor: "true"
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cloudcart-alert-rules
+  namespace: ecommerce
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: cloudcart.rules
+    rules:
+    - alert: CloudCartServiceDown
+      expr: up{namespace="ecommerce"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        namespace: ecommerce
+      annotations:
+        summary: "CloudCart service is down"
+        description: "A CloudCart backend service target is down for more than 1 minute."
+
+    - alert: CloudCartHighApiGateway5xx
+      expr: sum(rate(api_gateway_http_requests_total{status=~"5.."}[2m])) > 1
+      for: 1m
+      labels:
+        severity: warning
+        namespace: ecommerce
+      annotations:
+        summary: "High 5xx errors in API Gateway"
+        description: "API Gateway is returning high 5xx errors."
+
+    - alert: CloudCartPaymentFailures
+      expr: increase(payment_service_failed_total[5m]) > 3
+      for: 1m
+      labels:
+        severity: warning
+        namespace: ecommerce
+      annotations:
+        summary: "Payment failures detected"
+        description: "Payment Service has multiple failed payments in the last 5 minutes."
